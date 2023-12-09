@@ -7,5 +7,6 @@ fn main() {
     process(handle, io::stdout());
 }
 
-fn process(mut input: impl BufRead, mut output: impl Write) {
+fn process(input: impl BufRead, mut output: impl Write) {
+    output.write(0.to_string().as_bytes()).unwrap();
 }
