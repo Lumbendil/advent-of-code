@@ -28,111 +28,54 @@ fn process(input: impl BufRead) -> String {
     format!("{}", value)
 }
 
-
-/*
- 1  function Dijkstra(Graph, source):
- 2
- 3      for each vertex v in Graph.Vertices:
- 4          dist[v] ← INFINITY
- 5          prev[v] ← UNDEFINED
- 6          add v to Q
- 7      dist[source] ← 0
- 8
- 9      while Q is not empty:
-10          u ← vertex in Q with min dist[u]
-
-if u = target
-1  S ← empty sequence
-2  u ← target
-3  if prev[u] is defined or u = source:          // Do something only if the vertex is reachable
-4      while u is defined:                       // Construct the shortest path with a stack S
-5          insert u at the beginning of S        // Push the vertex onto the stack
-6          u ← prev[u]                           // Traverse from target to source
-
-
-11          remove u from Q
-12
-13          for each neighbor v of u still in Q:
-14              alt ← dist[u] + Graph.Edges(u, v)
-15              if alt < dist[v]:
-16                  dist[v] ← alt
-17                  prev[v] ← u
-18
-19      return dist[], prev[]
- */
 fn search_path_cost(map: &Vec<Vec<usize>>, start: (usize, usize), goal: (usize, usize)) -> usize {
     let map_size = (map.len(), map[0].len());
 
-    let mut open_set = DoublePriorityQueue::new();
+    let mut q = DoublePriorityQueue::new();
+    q.push(start, 0);
+    let mut prev = HashMap::new();
 
+    let mut already_visited = HashSet::new();
 
+    let mut best_path = Vec::new();
+    let mut best_distance = usize::MAX;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    open_set.push(start, estimate_distance(start, goal));
-    // dbg!(&open_set);
-
-    let mut came_from = HashMap::new();
-
-    let mut g_score = HashMap::new();
-    g_score.insert(start, 0);
-
-    while let Some((current, distance)) = open_set.pop_min() {
+    while let Some((current, distance)) = q.pop_min() {
         if current == goal {
-            return distance
-        }
-
-        dbg!(calculate_path(&came_from, current));
-        for neighbour in get_neighbours(current, map_size, &came_from) {
-            dbg!(&neighbour);
-            let tentative_g_score = g_score.get(&current).unwrap() + map[neighbour.0][neighbour.1];
-            let current_g_score = g_score.get(&neighbour).unwrap_or(&usize::MAX);
-
-            if tentative_g_score < *current_g_score {
-                came_from.insert(neighbour, current);
-                g_score.insert(neighbour, tentative_g_score);
-                open_set.push(neighbour, tentative_g_score + estimate_distance(neighbour, goal));
+            dbg!(distance);
+            if distance < best_distance {
+                best_distance = distance;
+                best_path = calculate_path(&prev, current);
             }
         }
 
-        // dbg!(&open_set);
+        already_visited.insert(current);
+
+        // dbg!(calculate_path(&prev, current), current, get_neighbours(current, map_size, &calculate_path(&prev, current)));
+        for neighbour in get_neighbours(current, map_size, &calculate_path(&prev, current)) {
+            /*if already_visited.contains(&neighbour) {
+                continue;
+            }*/
+
+            let alt = distance + map[neighbour.0][neighbour.1];
+            let (_, &dist_v) = q.get(&neighbour).unwrap_or((&neighbour, &usize::MAX));
+
+            if alt < dist_v {
+                q.push(neighbour, alt);
+                prev.insert(neighbour, current);
+            }
+        }
     }
 
-    panic!("no path found")
+    //dbg!(calculate_path_cost(best_path, map));
+
+    best_distance
 }
 
-fn calculate_path_cost(came_from: HashMap<(usize, usize), (usize, usize)>, mut current: (usize, usize), map: &Vec<Vec<usize>>) -> usize {
-    let mut value = 0;
+fn calculate_path_cost(mut path: Vec<(usize, usize)>, map: &Vec<Vec<usize>>) -> usize {
+    path.pop();
 
-    while let Some(new_current) = came_from.get(&current) {
-        // dbg!(current);
-        value += map[current.0][current.1];
-        current = *new_current;
-    }
-
-    value
+    path.into_iter().map(|(x, y)| map[x][y]).sum()
 }
 
 const NODES_TO_CHECK: usize = 3;
@@ -165,38 +108,40 @@ fn get_restricted_direction(path: &Vec<(usize, usize)>) -> Option<Direction> {
         return None
     }
 
-    let &(x, y) = path.last().unwrap();
-    let (x2, y2) = path[path.len() - NODES_TO_CHECK];
+    let nodes_back = NODES_TO_CHECK - if path.len() == NODES_TO_CHECK {1} else {0};
 
-    return if x2 + NODES_TO_CHECK - 1 == x {
-        debug_assert_eq!(y, y2);
-        Some(Up)
-    } else if x2 == x + NODES_TO_CHECK - 1 {
+    let (x, y) = path[0];
+    let (x2, y2) = path[nodes_back];
+
+    return if x2 + nodes_back == x {
         debug_assert_eq!(y, y2);
         Some(Down)
-    } else if y2 + NODES_TO_CHECK - 1 == y {
-        debug_assert_eq!(x, x2);
-        Some(Right)
-    } else if y2 == y + NODES_TO_CHECK - 1 {
+    } else if x2 == x + nodes_back {
+        debug_assert_eq!(y, y2);
+        Some(Up)
+    } else if y2 + nodes_back == y {
         debug_assert_eq!(x, x2);
         Some(Left)
+    } else if y2 == y + nodes_back {
+        debug_assert_eq!(x, x2);
+        Some(Right)
     } else {
         None
     }
 }
 
 
-fn get_neighbours((x, y): (usize, usize), (height, width): (usize, usize), came_from: &HashMap<(usize, usize), (usize, usize)>) -> Vec<(usize, usize)> {
+fn get_neighbours((x, y): (usize, usize), (height, width): (usize, usize), path: &Vec<(usize, usize)>) -> Vec<(usize, usize)> {
     use Direction::*;
     let mut neighbours = Vec::new();
 
-    let restricted_direction = get_restricted_direction(&calculate_path(came_from, (x, y)));
+    let restricted_direction = get_restricted_direction(path);
 
-    if x < height - 1 && restricted_direction != Some(Up) {
+    if x < height - 1 && restricted_direction != Some(Down) {
         neighbours.push((x + 1, y));
     }
 
-    if x > 0 && restricted_direction != Some(Down) {
+    if x > 0 && restricted_direction != Some(Up) {
         neighbours.push((x - 1, y));
     }
 
@@ -208,8 +153,9 @@ fn get_neighbours((x, y): (usize, usize), (height, width): (usize, usize), came_
         neighbours.push((x, y - 1));
     }
 
-    if let Some(previous) = came_from.get(&(x, y)) {
-        if let Some(index) = neighbours.iter().position(|x| x == previous) {
+    if path.len() > 1 {
+        let previous = path[1];
+        if let Some(index) = neighbours.iter().position(|x| *x == previous) {
             neighbours.remove(index);
         }
     }
@@ -233,11 +179,13 @@ mod tests {
     use crate::*;
 
     #[test]
-    fn test_estimate_distance() {
-        assert_eq!(estimate_distance((0, 0), (10, 10)), 20);
-        assert_eq!(estimate_distance((1, 0), (10, 10)), 19);
-        assert_eq!(estimate_distance((0, 1), (10, 10)), 19);
-        assert_eq!(estimate_distance((9, 9), (10, 10)), 2);
+    fn test_get_neighbours_restricts_paths() {
+        assert_eq!(get_neighbours((0, 2), (5, 5), &vec![(0, 2),(0, 1),(0, 0)]), vec![(1,2)]);
+        assert_eq!(get_neighbours((0, 0), (5, 5), &vec![(0, 0),(0, 1),(0, 2)]), vec![(1,0)]);
+        assert_eq!(get_neighbours((2, 0), (5, 5), &vec![(2, 0),(1, 0),(0, 0)]), vec![(2,1)]);
+        assert_eq!(get_neighbours((1, 0), (5, 5), &vec![(1, 0),(2, 0),(3, 0)]), vec![(1,1)]);
+
+        assert_eq!(get_neighbours((0, 2), (5, 5), &vec![(0, 2),(0, 1),(0, 0),(1, 0)]), vec![(1,2), (0, 3)]);
     }
 
     #[test]
