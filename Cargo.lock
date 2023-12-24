@@ -199,9 +199,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "day-22"
+name = "day-24"
 version = "0.1.0"
 dependencies = [
+ "itertools",
  "tuple",
 ]
 
